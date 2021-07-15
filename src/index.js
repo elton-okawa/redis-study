@@ -2,27 +2,33 @@ const Redis = require('ioredis');
 const redis = new Redis();
 
 redis.defineCommand("allocate", {
-  numberOfKeys: 4,
+  numberOfKeys: 3,
   lua: `
     local start = redis.call('TIME')
 
     local safety = KEYS[1]
-    local groupListKey = KEYS[2]
-    local groupHashKey = KEYS[3]
-    local lastGroupKey = KEYS[4]
+    local groupHashKey = KEYS[2]
+    local lastGroupKey = KEYS[3]
     local baseGroupKey = ARGV[1]
     local maxGroupSize = tonumber(ARGV[2])
     
     local pos
     if (redis.call('exists', safety) == 1) then
-      
-      local groupNumber = redis.call('lrange', groupListKey, 0, 0)[1];
+
+      if (redis.call('exists', lastGroupKey) == 0) then
+        redis.call('incr', lastGroupKey)
+      end
+
+      local groupNumber = redis.call('get', lastGroupKey)
       local groupKey = baseGroupKey .. '-' .. groupNumber
 
       pos = redis.call('hincrby', groupHashKey, groupKey, 1)
+
+      redis.log(redis.LOG_NOTICE, pos)
+      redis.log(redis.LOG_NOTICE, maxGroupSize)
+
       if (pos >= maxGroupSize) then
-        local newGroup = redis.call('incr', lastGroupKey)
-        redis.call('lpush', groupListKey, newGroup)
+        redis.call('incr', lastGroupKey)
       end
     end
 
@@ -40,32 +46,25 @@ redis.defineCommand("allocate", {
   /* setup
   
 SET safe ok 
-INCR last-group 
-LPUSH group-list 1 
 
   */
 
   // hash table -> tira a necessidade de saber a chave em compile time
-  // TODO não precisa ser mais um array de grupos
 
   const baseGroupKey = 'group';
-  const groupListKey = 'group-list';
   const lastGroupKey = 'last-group';
   const groupHashKey = 'group-hash';
   const safeKey = 'safe';
 
-  const pos = await redis.allocate(safeKey, groupListKey, groupHashKey, lastGroupKey, baseGroupKey, 3)
+  const pos = await redis.allocate(safeKey, groupHashKey, lastGroupKey, baseGroupKey, 3)
   
   if (pos !== null) {
     console.log('Position: ' + pos);
     
-    
     const lastGroup = await redis.get(lastGroupKey);
-    const groupList = await redis.lrange(groupListKey, 0, -1);
     const groupHash = await redis.hgetall(groupHashKey);
     console.log('GroupHash: ', groupHash);
     console.log('LastGroup: ' + lastGroup);
-    console.log('GroupList: ', groupList);
   } else {
     console.log('Maintenance');
   }
