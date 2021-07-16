@@ -10,7 +10,6 @@ redis.defineCommand("allocate", {
     local baseGroupKey = ARGV[1]
     local maxGroupSize = tonumber(ARGV[2])
     local expireAt = tonumber(ARGV[3])
-    redis.log(redis.LOG_NOTICE, expireAt)
 
     local pos
     local groupKey
@@ -57,7 +56,6 @@ SET safe ok
   const safeKey = 'safe';
 
   const expireAt = Math.floor((Date.now() + 60000) / 1000);
-  console.log('ExpireAt: ' + expireAt);
   const allocation = await redis.allocate(safeKey, groupHashKey, lastGroupKey, baseGroupKey, 3, expireAt)
   
   if (allocation !== null) {
